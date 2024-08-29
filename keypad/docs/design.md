@@ -25,7 +25,7 @@ This document covers the software acpects of the microcontroller, including:
 
 
 ## Security
-
+rolling codes
 ### Data Encryption
 
 ### Authentication
