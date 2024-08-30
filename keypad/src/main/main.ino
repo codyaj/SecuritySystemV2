@@ -1,5 +1,15 @@
+#include <ESP8266WiFi.h>
+
+#define SSID ""
+#define PASS ""
+
+// 15% for RSSI
+// 85% for Latency
+// Heartbeat 3 seconds
+// Watchdog timer at 9 seconds
 
 
+//const uint16_t port = 12345;
 
 class Keypad {
 private:
@@ -33,11 +43,28 @@ public:
   }
 };
 
+
 void setup() {
   Serial.begin(74480);
-  
-  Serial.println("\nStarting");
+
+  pinMode(D8, OUTPUT);
+
+  Serial.print("\nConnecting to WiFi...");
+
+  WiFi.begin(SSID, PASS);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+
+  Serial.print("Connected, local IP address: ");
+  Serial.println(WiFi.localIP());
+  Serial.print("RSSI: ");
+  Serial.println(WiFi.RSSI());
 }
+
 
 void loop() {
   Keypad keypad;

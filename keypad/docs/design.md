@@ -28,8 +28,11 @@ This document covers the software acpects of the microcontroller, including:
 rolling codes
 ### Data Encryption
 
-### Authentication
-
+### Jammer Detection
+  - **RSSI Monitoring:** The microcontroller tracks average RSSI and detects sudden drops or unusual fluctuations that may indicate jamming.
+  - **Latency Monitoring:** The microcontroller measures the round-trip time of test packets. Significant latency increases could signal interference or jamming.
+  - **Watchdog Timer and Heartbeat Mechanism:** A watchdog timer paired with periodic heartbeat signals detects network outages. If the heartbeat is missed, the system triggers an alert, indicating possible jamming.
+The alarm will only trigger if any two of the three detection methods activate, ensuring more reliable detection of potential jamming.
 
 ## Testing
 
