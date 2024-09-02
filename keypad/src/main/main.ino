@@ -81,8 +81,7 @@ public:
   }
 };
 
-// Verify message HMAC, and Nonce then return message
-class messager {
+class Messenger {
 private:
   const char* HMACkey = "SecretKey";
   const byte key[16] = {0xBA, 0x7D, 0x66, 0x18, 0x5B, 0xD7, 0x88, 0xCD, 0xA1, 0x50, 0xCD, 0x3A, 0xB3, 0xB4, 0x19, 0xA5};
@@ -195,6 +194,7 @@ public:
 
     return data;
   }
+
   void testing() {
     byte nonce[15];
     generateNonce(nonce);
@@ -226,7 +226,7 @@ void setup() {
 
   pinMode(D8, OUTPUT);
 
-  messager m;
+  Messenger m;
   m.testing();
 
   Serial.print("\nConnecting to WiFi...");
@@ -244,8 +244,6 @@ void setup() {
   Serial.print("RSSI: ");
   Serial.println(WiFi.RSSI());
 
-
-  while (true);
   // Connect to server
   if(!client.connect(serverIP, serverPort)) {
     Serial.println("Cannot connect to server");

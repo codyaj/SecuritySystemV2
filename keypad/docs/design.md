@@ -31,6 +31,14 @@ The message format used in communication between the microcontroller and the ser
   * **1 Byte for Information:** This byte is enough to carry all necessary commands or status signals, efficiently conveying the required data without excess overhead.
   * **15 Bytes for Nonce:** The nonce provides a unique identifier for each message, protecting against replay attacks by ensuring no two messages are the same. The AES128 encryption required 16 bytes of data to be used. Instead of wasting this on padding using 15 bytes for the Nonce improves its security.
 
+### Data Byte Meaning
+
+  1) **Bit 0:** Arm request (0 = Disarm, 1 = Arm)
+  2) **Bit 1:** Heartbeat Message (1 = Heartbeat)
+  3) **Bit 2:** Jamming Detected (1 = Jamming)
+  4) **Bit 3:** Acknowledge Response (1 = Acknowledge/Confirm)
+  5) **Bit 4-7:** Reserved for future use
+
 ### ESP8266 to Server Communication
 
   1) **Arm/Disarm Requests:**
@@ -39,7 +47,7 @@ The message format used in communication between the microcontroller and the ser
   1) **Heartbeat Monitoring:**
     - **ESP8266 --> Server:** Send periodic heartbeat messages.
     - **Server --> ESP8266:** Server responds with a heartbeat response.
-  1) **Arm/Disarm Requests:**
+  1) **Jamming Notification:**
     - **ESP8266 <--> Server:** Notify if jamming is detected.
     - **ESP8266 <--> Server:** Responds with a message confirmation
 
