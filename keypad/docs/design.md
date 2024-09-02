@@ -7,7 +7,7 @@
 The purpose of this microcontroller is to grant that user the ability to arm and disarm the system from a central physical location.
 
 ### Scope
-This document covers the software acpects of the microcontroller, including:
+This document covers the software aspects of the microcontroller, including:
 * **Keypad Integration:** Interaction and handling of keypad inputs.
 * **Communication Protocols:** Methods used for data exchange between the microcontroller and server.
 * **Data Flow:** The process of sending and receiving data.
@@ -19,14 +19,30 @@ This document covers the software acpects of the microcontroller, including:
 
 ### Keypress Handling
   - **Initialization:** The Keypad class handles the initialization of the keypad by assigning the pin mode for each pin.
-  - **Key Press Detection:** Key presses are detected when needed by calling the getChar function of a Keypad object. To manage debounce there should be atleast 200ms between each reading.
+  - **Key Press Detection:** Key presses are detected when needed by calling the getChar function of a Keypad object. To manage debounce there is a 200ms between each reading.
 
 ## Communication Protocols
 
+### ESP8266 to Server Communication
+
+  1) **Arm/Disarm Requests:**
+    - **ESP8266 --> Server:** Send an "Arm" or "Disarm" request.
+    - **Server --> ESP8266:** Server responds with an "Arm/Disarm confirm"
+  1) **Heartbeat Monitoring:**
+    - **ESP8266 --> Server:** Send periodic heartbeat messages.
+    - **Server --> ESP8266:** Server responds with a heartbeat response.
+  1) **Arm/Disarm Requests:**
+    - **ESP8266 <--> Server:** Notify if jamming is detected.
+    - **ESP8266 <--> Server:** Responds with a message confirmation
 
 ## Security
-rolling codes
+
+### Authentication
+  - **Nonces:** Unique values to prevent replay attacks and ensure message freshness.
+  - **HMAC:** Ensures message integrity and authenticity using a shared secret key. 
+
 ### Data Encryption
+  - **Encrypted Communication:** AES encryption protects all data exchanged between the microcontroller and server.
 
 ### Jammer Detection
   - **RSSI Monitoring:** The microcontroller tracks average RSSI and detects sudden drops or unusual fluctuations that may indicate jamming.

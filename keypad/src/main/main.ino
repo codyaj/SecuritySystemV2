@@ -1,15 +1,17 @@
 #include <ESP8266WiFi.h>
+#include <SHA256.h>
 
-#define SSID ""
-#define PASS ""
+#define NonceStorageSize 10
+
+#define ssid "TelstraK62F18"
+#define pass "r<!bqD9aFvFnrUHD{Ddowg2vqeY)Lzcr"
+byte serverIP[4] = {192,168,20,4};
+#define serverPort 12345
 
 // 15% for RSSI
 // 85% for Latency
 // Heartbeat 3 seconds
 // Watchdog timer at 9 seconds
-
-
-//const uint16_t port = 12345;
 
 class Keypad {
 private:
@@ -43,6 +45,80 @@ public:
   }
 };
 
+class PreviousNonce {
+private:
+  int arr[NonceStorageSize] = {0};
+  int valueCount = 0;
+public:
+  void insert(int val) {
+    if (valueCount != NonceStorageSize) {
+      arr[valueCount] = val;
+      valueCount += 1;
+      return;
+    }
+    for (int i = 0; i > (NonceStorageSize - 1); i++) {
+      arr[i] = arr[i + 1];
+    }
+    arr[NonceStorageSize - 1] = val;
+  }
+  bool includes(int val) {
+    for(int i = 0; i < NonceStorageSize; i++) {
+      if (arr[i] == val) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+};
+
+// Verify message HMAC, and Nonce then return message
+class messager {
+private:
+  const char* HMACkey = "SecretKey";
+  PreviousNonce previousNonce;
+  void calculateHMAC(const char* message, byte* hmacResult) {
+    SHA256 sha256;
+    sha256.reset();
+
+    sha256.resetHMAC(HMACkey, strlen(HMACkey));
+
+    sha256.update(message, strlen(message));
+
+    sha256.finalizeHMAC(HMACkey, strlen(HMACkey), hmacResult, 32);
+
+    sha256.clear();
+  }
+public:
+  /*void sendMessage(String msg){
+    // Encrypt Message and add nonce
+    int nonce = x;
+    String finalMessage = String(x + "|" + nonce);
+    // Calculate hmac
+
+    finalMessage = String(finalMessage + HMAC);
+    // send message
+    // Here I will code dont add code here
+  }
+  String recvMessage() {
+    // Seperate HMAC and Message+Nonce
+    x HMAC;
+    String msgNonce = String();
+    if (HMAC != calculateHMAC(msgNonce)) {
+      return "\0"; // Failed
+    }
+    // Seperate Message and Nonce
+    int Nonce;
+    String Message;
+    if (previousNonce.includes(Nonce)) {
+      return "\0"; // failed
+    }
+    previousNonce.insert(Nonce);
+    // Decrypt message AES
+  }*/
+};
+
+WiFiClient client;
 
 void setup() {
   Serial.begin(74480);
@@ -51,8 +127,8 @@ void setup() {
 
   Serial.print("\nConnecting to WiFi...");
 
-  WiFi.begin(SSID, PASS);
-
+  // Connect to WiFi
+  WiFi.begin(ssid, pass);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
@@ -63,6 +139,15 @@ void setup() {
   Serial.println(WiFi.localIP());
   Serial.print("RSSI: ");
   Serial.println(WiFi.RSSI());
+
+
+  while (true);
+  // Connect to server
+  if(!client.connect(serverIP, serverPort)) {
+    Serial.println("Cannot connect to server");
+    return;
+  }
+  Serial.println("Connected to server");
 }
 
 
@@ -70,7 +155,16 @@ void loop() {
   Keypad keypad;
   char x = keypad.getChar();
   if (x != '\0') {
-    Serial.println(x);
+    //Serial.println(x);
+    if(client.connected()) {
+      client.write((byte)x);
+      
+      int incomingByte = -1;
+      while ((incomingByte = client.read()) != -1) {
+        Serial.print((char)incomingByte);
+      }
+      Serial.println();
+    }
     delay(200); // debounce delay
   }
 }
