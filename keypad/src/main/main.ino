@@ -1,5 +1,6 @@
 #include <ESP8266WiFi.h>
 #include <SHA256.h>
+#include <AES.h>
 
 #define NonceStorageSize 10
 
@@ -12,6 +13,9 @@ byte serverIP[4] = {192,168,20,4};
 // 85% for Latency
 // Heartbeat 3 seconds
 // Watchdog timer at 9 seconds
+
+WiFiClient client;
+
 
 class Keypad {
 private:
@@ -47,83 +51,183 @@ public:
 
 class PreviousNonce {
 private:
-  int arr[NonceStorageSize] = {0};
+  byte arr[NonceStorageSize][15] = {0};
   int valueCount = 0;
-public:
-  void insert(int val) {
-    if (valueCount != NonceStorageSize) {
-      arr[valueCount] = val;
-      valueCount += 1;
-      return;
-    }
-    for (int i = 0; i > (NonceStorageSize - 1); i++) {
-      arr[i] = arr[i + 1];
-    }
-    arr[NonceStorageSize - 1] = val;
+
+  bool compareNonce(const byte* nonce1, const byte* nonce2) const {
+    return memcmp(nonce1, nonce2, 15) == 0;
   }
-  bool includes(int val) {
+public:
+  void insert(byte* val) {
+    if (valueCount != NonceStorageSize) {
+      memcpy(arr[valueCount], val, 15);
+      valueCount++;
+    } else {
+      // Shift elements to the left
+      for (int i = 0; i < (NonceStorageSize - 1); i++) {
+        memcpy(arr[i], arr[i + 1], 15);
+      }
+      // Insert the new nonce at the end
+      memcpy(arr[NonceStorageSize - 1], val, 15);
+    }
+  }
+  bool includes(byte* val) {
     for(int i = 0; i < NonceStorageSize; i++) {
-      if (arr[i] == val) {
+      if (compareNonce(arr[i], val)) {
         return true;
       }
     }
     return false;
   }
-
 };
 
 // Verify message HMAC, and Nonce then return message
 class messager {
 private:
   const char* HMACkey = "SecretKey";
+  const byte key[16] = {0xBA, 0x7D, 0x66, 0x18, 0x5B, 0xD7, 0x88, 0xCD, 0xA1, 0x50, 0xCD, 0x3A, 0xB3, 0xB4, 0x19, 0xA5};
   PreviousNonce previousNonce;
+
   void calculateHMAC(const char* message, byte* hmacResult) {
     SHA256 sha256;
     sha256.reset();
-
     sha256.resetHMAC(HMACkey, strlen(HMACkey));
-
     sha256.update(message, strlen(message));
-
     sha256.finalizeHMAC(HMACkey, strlen(HMACkey), hmacResult, 32);
-
     sha256.clear();
   }
-public:
-  /*void sendMessage(String msg){
-    // Encrypt Message and add nonce
-    int nonce = x;
-    String finalMessage = String(x + "|" + nonce);
-    // Calculate hmac
 
-    finalMessage = String(finalMessage + HMAC);
-    // send message
-    // Here I will code dont add code here
+  void encryptData(const byte data, const byte* nonce, byte* ciphertext) {
+    AES128 aes;
+    aes.setKey(key, 16);
+
+    byte block[16];
+
+    // Concatenate data and nonce
+    block[0] = data;
+    memcpy(block + 1, nonce, 15);
+
+    aes.encryptBlock(ciphertext, block);
   }
-  String recvMessage() {
-    // Seperate HMAC and Message+Nonce
-    x HMAC;
-    String msgNonce = String();
-    if (HMAC != calculateHMAC(msgNonce)) {
-      return "\0"; // Failed
-    }
-    // Seperate Message and Nonce
-    int Nonce;
-    String Message;
-    if (previousNonce.includes(Nonce)) {
-      return "\0"; // failed
-    }
-    previousNonce.insert(Nonce);
-    // Decrypt message AES
-  }*/
-};
 
-WiFiClient client;
+  void decryptData(const byte* ciphertext, byte* decryptedData, byte* nonce) {
+    AES128 aes;
+    aes.setKey(key, 16); // Set AES key
+
+    byte block[16]; // AES block size is 16 bytes
+
+    // Decrypt the 16-byte block
+    aes.decryptBlock(block, ciphertext);
+
+    // Extract data and nonce from the decrypted block
+    *decryptedData = block[0]; // The data is in the first byte
+    memcpy(nonce, block + 1, 15); // The nonce is in the remaining 15 bytes
+  }
+
+  void generateNonce(byte nonce[15]) {
+    for (int i = 0; i < 16; i++) {
+      nonce[i] = random(0, 255);
+    }
+  }
+public:
+  void sendMessage(const byte data){
+    byte hmacResult[32];
+    byte ciphertext[16];
+    byte nonce[15];
+
+    generateNonce(nonce);
+
+    encryptData(data, nonce, ciphertext);
+
+    calculateHMAC(reinterpret_cast<const char*>(ciphertext), hmacResult);
+
+    // send hmac
+    for (int i = 0; i < 32; i++) {
+      client.print(hmacResult[i]);
+    }
+
+    // send ciphertext
+    for (int i = 0; i < 16; i++) {
+      client.print(ciphertext[i]);
+    }
+  }
+
+  byte recvMessage() {
+    byte hmacMessage[32];
+    byte dataNonce[16];
+    byte data;
+    byte nonce[15];
+
+    // Seperate HMAC and dataNonce
+    int index = 0;
+    int incomingByte = -1;
+    while ((incomingByte = client.read()) != -1) {
+      if (index < 32) {
+        hmacMessage[index] = incomingByte;
+      } else if (index < 48) {
+        dataNonce[index - 32] = incomingByte;
+      } else {
+        return '\0'; // Message is too long
+      }
+      index += 1;
+    }
+    
+    // Calculate HMAC
+    byte hmacResult[32];
+    calculateHMAC(reinterpret_cast<const char*>(dataNonce), hmacResult);
+
+    // Compare HMACs
+    if (memcmp(hmacResult, hmacMessage, 32) != 0) {
+      return '\0'; // HMAC check failed
+    }
+    Serial.println("Passed HMAC");  // Testing
+
+    // Decrypt message AES
+    decryptData(dataNonce, &data, nonce);
+    Serial.println("Decrypted Nonce and Data"); // Testing
+
+    // Check nonce
+    if (previousNonce.includes(nonce)) {
+      return '\0'; // Nonce check failed
+    }
+    Serial.println("Passed Nonce");  // Testing
+    previousNonce.insert(nonce);
+
+    return data;
+  }
+  void testing() {
+    byte nonce[15];
+    generateNonce(nonce);
+    byte data = 0xAB;
+    byte ciphertext[16];
+    encryptData(data, nonce, ciphertext);
+
+    Serial.print("Encrypted Data: ");
+    for (byte x : ciphertext) {
+      Serial.print(x, HEX);
+    }
+    Serial.println();
+
+    byte newnonce[15];
+    byte newdata;
+    decryptData(ciphertext, &newdata, newnonce);
+    Serial.print("Data: ");
+    Serial.println(newdata, HEX);
+    Serial.print("Nonce: ");
+    for (byte x : newnonce) {
+      Serial.print(x, HEX);
+    }
+    Serial.println();
+  }
+};
 
 void setup() {
   Serial.begin(74480);
 
   pinMode(D8, OUTPUT);
+
+  messager m;
+  m.testing();
 
   Serial.print("\nConnecting to WiFi...");
 

@@ -23,6 +23,14 @@ This document covers the software aspects of the microcontroller, including:
 
 ## Communication Protocols
 
+### Message Formatting
+
+The message format used in communication between the microcontroller and the server consists of the follwing components:
+
+  * **32 Bytes for HMAC:** This secures the message by ensuring its integrity and authenticity, preventing tampering and verifying the sender's identity.
+  * **1 Byte for Information:** This byte is enough to carry all necessary commands or status signals, efficiently conveying the required data without excess overhead.
+  * **15 Bytes for Nonce:** The nonce provides a unique identifier for each message, protecting against replay attacks by ensuring no two messages are the same. The AES128 encryption required 16 bytes of data to be used. Instead of wasting this on padding using 15 bytes for the Nonce improves its security.
+
 ### ESP8266 to Server Communication
 
   1) **Arm/Disarm Requests:**
@@ -42,7 +50,7 @@ This document covers the software aspects of the microcontroller, including:
   - **HMAC:** Ensures message integrity and authenticity using a shared secret key. 
 
 ### Data Encryption
-  - **Encrypted Communication:** AES encryption protects all data exchanged between the microcontroller and server.
+  - **Encrypted Communication:** AES128 encryption protects all data exchanged between the microcontroller and server. To protect against recognizing patterns in the data sent the nonce is included with the data to always give a unique encrypted output.
 
 ### Jammer Detection
   - **RSSI Monitoring:** The microcontroller tracks average RSSI and detects sudden drops or unusual fluctuations that may indicate jamming.
