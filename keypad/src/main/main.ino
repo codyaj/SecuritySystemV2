@@ -9,8 +9,8 @@
 byte serverIP[4] = {192,168,20,4};
 #define serverPort 12345
 
-// 15% for RSSI
-// 85% for Latency
+#define RSSIRange 1.15
+#define LatencyRange 1.85
 // Heartbeat 3 seconds
 // Watchdog timer at 9 seconds
 
@@ -221,6 +221,68 @@ public:
   }
 };
 
+class WatchDog {
+private:
+  const int watchdog = 9000; // 9000 milliseconds
+  unsigned long lastUpdate;
+public:
+  void update() {
+    lastUpdate = millis(); // heartbeat
+  }
+  bool getStatus() const {
+    if ((millis() - lastUpdate) >= watchdog) {
+      return true; // Set an alarm
+    }
+    return false;
+  }
+};
+
+class RSSIMonitor {
+private:
+  long average = 0;
+  int total = 0;
+  bool alarm = false;
+public:
+  void update() {
+    long curr = WiFi.RSSI();
+    if (total > 0 && curr >= (average * RSSIRange)) {
+      alarm = true;
+      return;
+    }
+    average = ((average * total) + curr) / (total + 1);
+    total += 1;
+  }
+
+  bool getStatus() const {
+    return alarm;
+  }
+
+  void resetStatus() {
+    alarm = false;
+  }
+};
+
+class LatencyMonitor {
+private:
+  unsigned long average;
+  int total;
+  unsigned long startTime;
+public:
+  void start() {
+    startTime = millis();
+  }
+
+  bool end() {
+    unsigned long curr = millis();
+    if (total > 0 && (curr - startTime) >= (average * LatencyRange)) {
+      return true;
+    }
+    average = ((average * total) + (curr - startTime)) / (total + 1);
+    total += 1;
+    return false;
+  }
+};
+
 void setup() {
   Serial.begin(74480);
 
@@ -243,30 +305,18 @@ void setup() {
   Serial.println(WiFi.localIP());
   Serial.print("RSSI: ");
   Serial.println(WiFi.RSSI());
-
-  // Connect to server
-  if(!client.connect(serverIP, serverPort)) {
-    Serial.println("Cannot connect to server");
-    return;
-  }
-  Serial.println("Connected to server");
 }
 
 
 void loop() {
-  Keypad keypad;
-  char x = keypad.getChar();
-  if (x != '\0') {
-    //Serial.println(x);
-    if(client.connected()) {
-      client.write((byte)x);
-      
-      int incomingByte = -1;
-      while ((incomingByte = client.read()) != -1) {
-        Serial.print((char)incomingByte);
-      }
-      Serial.println();
-    }
-    delay(200); // debounce delay
+  if(!client.connect(serverIP, serverPort)) {
+    Serial.println("Cannot connect to server");
+    digitalWrite(D8, HIGH);
+    delay(100);
+    digitalWrite(D8, LOW);
+    delay(200);
+  }
+  while(client.connected()) {
+
   }
 }
