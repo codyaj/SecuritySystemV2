@@ -269,10 +269,12 @@ public:
 
 class LatencyMonitor {
 private:
-  unsigned long average;
+  float average;
   int total;
   unsigned long startTime;
 public:
+  LatencyMonitor() : average(0), total(0) {}
+
   void start() {
     startTime = millis();
   }
@@ -312,13 +314,9 @@ void setup() {
   Serial.println(WiFi.RSSI());
 }
 
-RSSIMonitor rssiMonitor;
 void loop() {
-  rssiMonitor.update();
-  Serial.print("RSSI Status: ");
-  Serial.println(rssiMonitor.getStatus());
-  rssiMonitor.resetStatus();
-  delay(250);
+  LatencyMonitor latencyMonitor;
+  
   /*if(!client.connect(serverIP, serverPort)) {
     Serial.println("Cannot connect to server");
     digitalWrite(D8, HIGH);
