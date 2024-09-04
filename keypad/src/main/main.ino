@@ -239,16 +239,21 @@ public:
 
 class RSSIMonitor {
 private:
-  long average = 0;
-  int total = 0;
-  bool alarm = false;
+  float average;
+  int total;
+  bool alarm;
 public:
+  RSSIMonitor() : average(0), total(0), alarm(false) {}
+
   void update() {
-    long curr = WiFi.RSSI();
-    if (total > 0 && curr >= (average * RSSIRange)) {
-      alarm = true;
-      return;
+    int curr = WiFi.RSSI();
+
+    // Allow a stable average to establish
+    if (total > 10 && curr <= (RSSIRange * average)) {
+        alarm = true;
+        return;
     }
+
     average = ((average * total) + curr) / (total + 1);
     total += 1;
   }
@@ -307,9 +312,14 @@ void setup() {
   Serial.println(WiFi.RSSI());
 }
 
-
+RSSIMonitor rssiMonitor;
 void loop() {
-  if(!client.connect(serverIP, serverPort)) {
+  rssiMonitor.update();
+  Serial.print("RSSI Status: ");
+  Serial.println(rssiMonitor.getStatus());
+  rssiMonitor.resetStatus();
+  delay(250);
+  /*if(!client.connect(serverIP, serverPort)) {
     Serial.println("Cannot connect to server");
     digitalWrite(D8, HIGH);
     delay(100);
@@ -318,5 +328,5 @@ void loop() {
   }
   while(client.connected()) {
 
-  }
+  }*/
 }
