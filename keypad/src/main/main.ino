@@ -194,31 +194,6 @@ public:
 
     return data;
   }
-
-  void testing() {
-    byte nonce[15];
-    generateNonce(nonce);
-    byte data = 0xAB;
-    byte ciphertext[16];
-    encryptData(data, nonce, ciphertext);
-
-    Serial.print("Encrypted Data: ");
-    for (byte x : ciphertext) {
-      Serial.print(x, HEX);
-    }
-    Serial.println();
-
-    byte newnonce[15];
-    byte newdata;
-    decryptData(ciphertext, &newdata, newnonce);
-    Serial.print("Data: ");
-    Serial.println(newdata, HEX);
-    Serial.print("Nonce: ");
-    for (byte x : newnonce) {
-      Serial.print(x, HEX);
-    }
-    Serial.println();
-  }
 };
 
 class WatchDog {
@@ -314,17 +289,12 @@ void setup() {
   Serial.println(WiFi.RSSI());
 }
 
+Messenger messenger;
+
 void loop() {
   LatencyMonitor latencyMonitor;
   
-  /*if(!client.connect(serverIP, serverPort)) {
-    Serial.println("Cannot connect to server");
-    digitalWrite(D8, HIGH);
-    delay(100);
-    digitalWrite(D8, LOW);
-    delay(200);
-  }
-  while(client.connected()) {
+  if (byte data = messenger.recvMessage() == '\0') {
 
-  }*/
+  }
 }
