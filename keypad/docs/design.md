@@ -33,7 +33,7 @@ The message format used in communication between the microcontroller and the ser
 
 ### Data Byte Meaning
 
-  1) **Bit 0:** Arm request (0 = Disarm, 1 = Arm)
+  1) **Bit 0:** Arm request (1 = Arm)
   2) **Bit 1:** Heartbeat Message (1 = Heartbeat)
   3) **Bit 2:** Jamming Detected (1 = Jamming)
   4) **Bit 3:** Acknowledge Response (1 = Acknowledge/Confirm)

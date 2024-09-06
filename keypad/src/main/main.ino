@@ -6,16 +6,18 @@
 
 #define ssid "TelstraK62F18"
 #define pass "r<!bqD9aFvFnrUHD{Ddowg2vqeY)Lzcr"
-byte serverIP[4] = {192,168,20,4};
+const byte serverIP[4] = {192,168,20,4};
 #define serverPort 12345
 
+const char passcode[4] = {'1', '2', '3', '4'};
 #define RSSIRange 1.15
 #define LatencyRange 1.85
 // Heartbeat 3 seconds
 // Watchdog timer at 9 seconds
+#define probationaryAlarmTime 60
+
 
 WiFiClient client;
-
 
 class Keypad {
 private:
@@ -216,16 +218,16 @@ class RSSIMonitor {
 private:
   float average;
   int total;
-  bool alarm;
+  bool status;
 public:
-  RSSIMonitor() : average(0), total(0), alarm(false) {}
+  RSSIMonitor() : average(0), total(0), status(false) {}
 
   void update() {
     int curr = WiFi.RSSI();
 
     // Allow a stable average to establish
     if (total > 10 && curr <= (RSSIRange * average)) {
-        alarm = true;
+        status = true;
         return;
     }
 
@@ -233,12 +235,9 @@ public:
     total += 1;
   }
 
-  bool getStatus() const {
-    return alarm;
-  }
-
-  void resetStatus() {
-    alarm = false;
+  bool getStatus() {
+    status = false;
+    return status;
   }
 };
 
@@ -247,31 +246,70 @@ private:
   float average;
   int total;
   unsigned long startTime;
+  bool status;
 public:
-  LatencyMonitor() : average(0), total(0) {}
+  LatencyMonitor() : average(0), total(0), status(false) {}
 
   void start() {
     startTime = millis();
   }
 
-  bool end() {
+  void end() {
     unsigned long curr = millis();
     if (total > 0 && (curr - startTime) >= (average * LatencyRange)) {
-      return true;
+      status = true;
+      return;
     }
     average = ((average * total) + (curr - startTime)) / (total + 1);
     total += 1;
-    return false;
+  }
+
+  bool getStatus() {
+    status = false;
+    return status;
   }
 };
+
+class OutgoingMessages { // circular buffer
+private:
+  byte messages[3];
+  int head;
+  int tail;
+  int count;
+public:
+  OutgoingMessages() : head(0), tail(0), count(0) {}
+
+  void add(byte message) {
+    messages[head] = message;
+    head = (head + 1) % 3;
+
+    if (count < 3) {
+      count += 1;
+    } else {
+      tail = (tail + 1) % 3;
+    }
+  }
+
+  byte get() {
+    if (count == 0) { // buffer empty
+      return 0;
+    }
+
+    byte message = messages[tail];
+    tail = (tail + 1) % 3;
+    count -= 1;
+    return message;
+  }
+
+  bool isEmpty() {
+    return count == 0;
+  }
+}
 
 void setup() {
   Serial.begin(74480);
 
   pinMode(D8, OUTPUT);
-
-  Messenger m;
-  m.testing();
 
   Serial.print("\nConnecting to WiFi...");
 
@@ -289,12 +327,124 @@ void setup() {
   Serial.println(WiFi.RSSI());
 }
 
+unsigned long nextAlarm = 0;
+unsigned long probationary = 0;
+bool probationaryAlarm = false;
+bool alarmOn = false;
+bool alarmActive = false;
+void alarmController() {
+  unsigned long curr = millis();
+  if (alarmActive && curr >= nextAlarm) {
+    digitalWrite(D8, alarmOn);
+    nextAlarm = curr + 100;
+    alarmOn = !alarmOn;
+  } else if (probationaryAlarm) {
+    if (curr >= probationary + probationaryAlarmTime) {
+      probationaryAlarm = false;
+      alarmActive = true;
+    } else if (curr >= nextAlarm) {
+      digitalWrite(D8, alarmOn);
+      if (alarmOn) {
+        nextAlarm = curr + 450;
+      } else {
+        nextAlarm = curr + 50;
+      }
+      alarmOn = !alarmOn;
+    }
+  } else {
+    digitalWrite(D8, LOW);
+  }
+}
+
+LatencyMonitor latencyMonitor;
+RSSIMonitor rssiMonitor;
+WatchDog watchDog;
+void jammingController() {
+  if (watchDog.getStatus() || (rssiMonitor.getStatus() & latencyMonitor.getStatus())) {
+    alarmActive = true;
+    outgoingMessages.add(1<<2);
+  }
+}
+
+bool onLockdown = false;
+OutgoingMessages outgoingMessages;
 Messenger messenger;
+void serverController() {
+  if (!client.connected()) {
+    if (!client.connect(serverIP, serverPort)) {
+      return;
+    }
+  }
+
+  // Recv all messages
+  byte in;
+  while ((in = messenger.recvMessage()) != 0) {
+    if (in & (1<<0) && onLockdown) { // Input from a sensor
+      probationary = millis()
+      probationaryAlarm = true;
+      outgoingMessages.add(((1<<0) | (1<<3))); // Confirmation Message
+    } else if (in & (1<<1)) { // Heartbeat
+      if (!(in & (1<<3))) { // if not confirmation
+        latencyMonitor.start();
+        outgoingMessages.add(((1<<1) | (1<<3))); // Confirmation Message
+      } else {
+        latency.end();
+      }
+    } else if (in & (1<<2)) { // Jamming
+      alarmActive = true;
+      outgoingMessages.add(((1<<2) | (1<<3))); // Confirmation Message
+    }
+  }
+
+  // Send all messages
+  while (!outgoingMessages.isEmpty()) {
+    messenger.sendMessage(outgoingMessages.get());
+  }
+}
+
+int currCode[4] = {0};
+int codeIndex = 0;
+Keypad keypad;
+void keypadController() {
+  char key;
+  if ((key = keypad.getChar()) != '\0') {
+    if (alarmActive || probationaryAlarm) { // Waiting for code
+      if (key == '#') {
+        bool valid = true;
+        for (int i = 0; i < 4; i++) {
+          if (currCode[i] != passcode[i]) {
+            valid = false;
+            break;
+          }
+        }
+
+        if (valid) {
+          alarmActive = false;
+          probationaryAlarm = false;
+          codeIndex = 0;
+        }
+
+      } else if (key == '*') {
+        for (int i = 0; i < 4; i++) {
+          currCode[i] = 0;
+        }
+        codeIndex = 0;
+
+      } else {
+        if (codeIndex <= 3) {
+          currCode[codeIndex] = key;
+          codeIndex += 1;
+        }
+      }
+    } else if (key == 'A') {
+        outgoingMessages.add((1<<0));
+    }
+  }
+}
 
 void loop() {
-  LatencyMonitor latencyMonitor;
-  
-  if (byte data = messenger.recvMessage() == '\0') {
-
-  }
+  alarmController();
+  jammingController();
+  serverController();
+  keypadController();
 }
