@@ -126,7 +126,7 @@ private:
   }
 
   void generateNonce(byte nonce[15]) {
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < 15; i++) {
       nonce[i] = random(0, 255);
     }
   }
